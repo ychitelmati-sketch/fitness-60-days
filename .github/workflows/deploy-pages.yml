@@ -1,4 +1,4 @@
-name: Deploy frontend to GitHub Pages
+name: Decommission FORM60 Pages
 on:
   push:
     branches: [main, master]
@@ -14,22 +14,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm install
-      - name: Build
-        working-directory: frontend
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
-          VITE_BASE_PATH: /fitness-60-days/
-        run: npm run build
+      - name: Create decommissioned site
+        run: |
+          mkdir -p site
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="ru">
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>404 — FORM60</title></head>
+          <body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0b1020;color:#fff;font:16px system-ui,sans-serif">
+          <main style="max-width:520px;padding:40px;text-align:center"><h1 style="font-size:64px;margin:0">404</h1><p>Проект FORM60 удалён.</p></main>
+          </body></html>
+          HTML
+          cp site/index.html site/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/dist
+          path: site
   deploy:
     environment:
       name: github-pages
