@@ -24,7 +24,7 @@ export type RemoteState = {
   completed_days: number[];
   notes: Record<number, string>;
   started_at: string;
-  has_stored_data: boolean;
+  has_stored_data?: boolean;
 };
 
 const PREFIX = "form60_";
