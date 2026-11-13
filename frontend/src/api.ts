@@ -1,48 +1,117 @@
 /// <reference types="vite/client" />
 
-const API_URL = (import.meta.env.VITE_API_URL || window.location.origin).replace(/\/$/, "");
+type CloudStorage = {
+  getItems: (keys: string[], callback: (error: string | null, values: Record<string, string>) => void) => void;
+  setItem: (key: string, value: string, callback?: (error: string | null, stored: boolean) => void) => void;
+  removeItem: (key: string, callback?: (error: string | null, removed: boolean) => void) => void;
+};
 
-type TelegramWebApp = { initData?: string; ready?: () => void; expand?: () => void };
+type TelegramWebApp = {
+  initData?: string;
+  ready?: () => void;
+  expand?: () => void;
+  isVersionAtLeast?: (version: string) => boolean;
+  CloudStorage?: CloudStorage;
+};
+
 declare global {
   interface Window {
     Telegram?: { WebApp?: TelegramWebApp };
   }
 }
 
-export async function authenticateTelegram(): Promise<string | null> {
-  const webApp = window.Telegram?.WebApp;
-  webApp?.ready?.();
-  webApp?.expand?.();
-  const initData = webApp?.initData;
-  if (!initData) return null;
+export type RemoteState = {
+  completed_days: number[];
+  notes: Record<number, string>;
+  started_at: string;
+};
 
-  const response = await fetch(`${API_URL}/api/auth/telegram`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ init_data: initData }),
-  });
-  if (!response.ok) throw new Error("Telegram auth failed");
-  const data = await response.json();
-  return data.access_token as string;
+const PREFIX = "form60_";
+const KEYS = [
+  PREFIX + "completed",
+  PREFIX + "started",
+  ...Array.from({ length: 60 }, (_, i) => PREFIX + "note_" + (i + 1)),
+];
+
+function getCloudStorage(): CloudStorage | null {
+  const app = window.Telegram?.WebApp;
+  app?.ready?.();
+  app?.expand?.();
+  if (!app?.CloudStorage || (app.isVersionAtLeast && !app.isVersionAtLeast("6.9"))) return null;
+  return app.CloudStorage;
 }
 
-export async function loadRemoteState(token: string): Promise<Record<string, unknown>> {
-  const response = await fetch(`${API_URL}/api/state`, {
-    headers: { Authorization: `Bearer ${token}` },
+function getItems(storage: CloudStorage, keys: string[]): Promise<Record<string, string>> {
+  return new Promise((resolve, reject) => {
+    storage.getItems(keys, (error, values) => {
+      if (error) reject(new Error(error));
+      else resolve(values || {});
+    });
   });
-  if (!response.ok) throw new Error("Could not load tracker state");
-  const data = await response.json();
-  return (data.state || {}) as Record<string, unknown>;
 }
 
-export async function saveRemoteState(token: string, state: Record<string, unknown>): Promise<void> {
-  const response = await fetch(`${API_URL}/api/state`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ state }),
+function setItem(storage: CloudStorage, key: string, value: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    storage.setItem(key, value, (error, stored) => {
+      if (error || stored === false) reject(new Error(error || "Telegram CloudStorage write failed"));
+      else resolve();
+    });
   });
-  if (!response.ok) throw new Error("Could not save tracker state");
+}
+
+function removeItem(storage: CloudStorage, key: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    storage.removeItem(key, (error, removed) => {
+      if (error || removed === false) reject(new Error(error || "Telegram CloudStorage remove failed"));
+      else resolve();
+    });
+  });
+}
+
+export async function loadCloudState(): Promise<RemoteState | null> {
+  const storage = getCloudStorage();
+  if (!storage) return null;
+  const values = await getItems(storage, KEYS);
+  let completed: number[] = [];
+  try {
+    const parsed = JSON.parse(values[PREFIX + "completed"] || "[]");
+    if (Array.isArray(parsed)) completed = parsed.filter((day: unknown) => Number.isInteger(day) && Number(day) >= 1 && Number(day) <= 60);
+  } catch { /* Ignore invalid stored progress. */ }
+
+  const notes: Record<number, string> = {};
+  for (let day = 1; day <= 60; day++) {
+    const value = values[PREFIX + "note_" + day];
+    if (typeof value === "string" && value) notes[day] = value.slice(0, 500);
+  }
+
+  return {
+    completed_days: completed,
+    notes,
+    started_at: values[PREFIX + "started"] || new Date().toISOString(),
+  };
+}
+
+export async function saveCloudState(state: RemoteState): Promise<void> {
+  const storage = getCloudStorage();
+  if (!storage) throw new Error("Telegram CloudStorage is unavailable");
+
+  const values: Record<string, string> = {
+    [PREFIX + "completed"]: JSON.stringify(state.completed_days),
+    [PREFIX + "started"]: state.started_at,
+  };
+  for (let day = 1; day <= 60; day++) {
+    const note = state.notes[day] || "";
+    if (note) values[PREFIX + "note_" + day] = note.slice(0, 500);
+  }
+
+  const existing = await getItems(storage, KEYS);
+  const operations = Object.entries(values)
+    .filter(([key, value]) => existing[key] !== value)
+    .map(([key, value]) => setItem(storage, key, value));
+
+  for (let day = 1; day <= 60; day++) {
+    const key = PREFIX + "note_" + day;
+    if (!values[key] && existing[key]) operations.push(removeItem(storage, key));
+  }
+  await Promise.all(operations);
 }
