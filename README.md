@@ -2,88 +2,65 @@
 
 Telegram Mini App для 60-дневного челленджа: отметки, календарь, заметки и статистика.
 
-## Архитектура production
+## Как устроено приложение
 
-- Frontend: React + Vite + TypeScript, Nginx.
-- API: FastAPI + SQLAlchemy.
-- База: SQLite в постоянном Docker volume `tracker_data`.
-- Telegram bot: aiogram 3, отдельный контейнер.
-- HTTPS: Caddy автоматически получает и обновляет TLS-сертификат.
-- Внешний доступ: только порты 80/443. API и база не публикуются напрямую.
+- **Frontend:** React + Vite + TypeScript.
+- **Хостинг:** GitHub Pages — бесплатная публикация интерфейса по HTTPS.
+- **Облачное хранение:** Telegram Mini App CloudStorage.
+- **Сервер/VPS:** не требуется.
+- **Отдельная база данных:** не требуется.
 
-## Требования к VPS
+При запуске внутри Telegram приложение использует CloudStorage. Прогресс и заметки хранятся в облаке Telegram отдельно для каждого пользователя и доступны при открытии Mini App с другого устройства под тем же Telegram-аккаунтом. Обычный браузер вне Telegram использует localStorage и не синхронизируется с Telegram.
 
-Ubuntu 22.04/24.04, Docker Engine с Compose plugin, домен с A/AAAA-записью на IP VPS. Для Telegram Mini App обязателен HTTPS.
+## Публикация
 
-## Развёртывание на VPS
+GitHub Actions автоматически собирает frontend и публикует его на GitHub Pages при push в основную ветку.
 
-1. Установите Docker Engine и Compose plugin по официальной инструкции Docker.
-2. Клонируйте репозиторий на сервер:
-   ```bash
-   git clone https://github.com/ychitelmati-sketch/fitness-60-days.git
-   cd fitness-60-days
-   ```
-3. Создайте локальный файл окружения:
-   ```bash
-   cp .env.example .env
-   chmod 600 .env
-   nano .env
-   ```
-4. Укажите:
-   - `DOMAIN` — ваш домен, направленный на VPS;
-   - `BOT_TOKEN` — токен бота из BotFather;
-   - `SESSION_SECRET` — случайную строку не короче 32 символов.
-5. Запустите:
-   ```bash
-   docker compose up -d --build
-   ```
-6. Проверьте:
-   ```bash
-   docker compose ps
-   curl -fsS https://ВАШ-ДОМЕН/health
-   ```
-7. В BotFather настройте домен Mini App и URL кнопки запуска: `https://ВАШ-ДОМЕН`.
+Адрес приложения:
 
-Файл `.env` и база данных не должны попадать в Git. Не отправляйте их содержимое в чаты и не добавляйте в issue.
+https://ychitelmati-sketch.github.io/fitness-60-days/
 
-## Данные и резервные копии
+Проверки сборки:
 
-SQLite хранится в именованном Docker volume `tracker_data`, поэтому пересоздание контейнера не удаляет базу. Не выполняйте `docker compose down -v`: ключ `-v` удалит volume с данными.
+https://github.com/ychitelmati-sketch/fitness-60-days/actions
 
-Резервная копия базы (создаёт файл в текущей директории сервера):
-```bash
-docker compose exec -T api python -c "import sqlite3; src=sqlite3.connect('/data/tracker.db'); dst=sqlite3.connect('/tmp/tracker-backup.db'); src.backup(dst); dst.close(); src.close()"
-docker cp "$(docker compose ps -q api)":/tmp/tracker-backup.db "./tracker-backup-$(date +%F).db"
-chmod 600 ./tracker-backup-*.db
-```
-Храните резервные копии отдельно от публичного web-root и ограничьте к ним доступ.
+## Подключение Telegram Mini App
 
-## Локальная разработка
+1. Откройте Telegram и найдите **@BotFather**.
+2. Выберите существующего бота или создайте нового через `/newbot`.
+3. Отправьте `/setmenubutton` и выберите своего бота.
+4. Задайте название кнопки, например `Открыть FORM60`.
+5. В качестве URL укажите:
+   `https://ychitelmati-sketch.github.io/fitness-60-days/`
+6. Откройте чат с ботом и запустите Mini App кнопкой меню.
 
-Frontend:
+Для CloudStorage используется API Telegram Mini Apps версии 6.9 или новее. Токен бота не встраивается во frontend и не нужен для хранения данных в CloudStorage. Если бот использует собственный backend для других функций, его токен должен храниться только в серверных переменных окружения.
+
+## Хранение данных
+
+CloudStorage использует отдельные ключи:
+- список выполненных дней;
+- дата начала челленджа;
+- заметки по дням (по одному ключу на день).
+
+Каждая заметка ограничена 500 символами. Локальная копия в браузере остаётся резервом для обычного режима, но не заменяет облачную синхронизацию Telegram.
+
+## Разработка
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Backend:
+Проверка production-сборки:
+
 ```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+npm run build
 ```
 
-## Синхронизация
+## Важно
 
-Серверная синхронизация включается при открытии приложения внутри Telegram Mini App: сервер проверяет подпись Telegram `initData`, выдаёт сессионный токен и сохраняет состояние пользователя в SQLite. Обычный браузер без Telegram WebApp работает локально в своём браузере и не синхронизируется между устройствами.
-
-## Безопасность
-
-- Не храните реальные секреты в Git.
-- Не открывайте порт 8000 наружу; API доступен через HTTPS reverse proxy.
-- Используйте только HTTPS URL в BotFather.
-- Делайте резервные копии volume `tracker_data`.
-- После случайной публикации секрета отзовите его у провайдера и создайте новый.
+- Не помещайте токены бота и другие секреты в frontend, GitHub Pages или публичный репозиторий.
+- GitHub Pages публикует клиентский код: приватность репозитория не делает загруженный сайт или JavaScript секретными.
+- Старые файлы FastAPI/Docker в репозитории относятся к прежнему варианту развёртывания и не используются GitHub Pages-версией.
