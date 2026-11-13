@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL || window.location.origin).replace(/\/$/, "");
 
-type TelegramWebApp = { initData?: string };
+type TelegramWebApp = { initData?: string; ready?: () => void; expand?: () => void };
 declare global {
   interface Window {
     Telegram?: { WebApp?: TelegramWebApp };
@@ -10,8 +10,10 @@ declare global {
 }
 
 export async function authenticateTelegram(): Promise<string | null> {
-  if (!API_URL) return null;
-  const initData = window.Telegram?.WebApp?.initData;
+  const webApp = window.Telegram?.WebApp;
+  webApp?.ready?.();
+  webApp?.expand?.();
+  const initData = webApp?.initData;
   if (!initData) return null;
 
   const response = await fetch(`${API_URL}/api/auth/telegram`, {
