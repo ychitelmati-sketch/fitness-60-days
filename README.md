@@ -24,7 +24,7 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --env-file .env
 ```
 API: `http://127.0.0.1:8000`, документация: `http://127.0.0.1:8000/docs`.
 
@@ -38,7 +38,7 @@ python -m app.bot
 В репозитории откройте **Settings → Pages** и выберите **GitHub Actions** в качестве источника. Workflow собирает только frontend. Адрес сайта будет иметь вид:
 `https://ychitelmati-sketch.github.io/fitness-60-days/`
 
-Для Vite base используется путь репозитория. Backend и Telegram-бот на GitHub Pages не запускаются: их нужно отдельно разместить на сервере/платформе с Python. Для production задайте URL API через `VITE_API_URL`.
+Для Vite base используется путь репозитория. Backend и Telegram-бот на GitHub Pages не запускаются: их нужно отдельно разместить на сервере/платформе с Python. Для подключения frontend к backend задайте GitHub Actions variable `VITE_API_URL` в Settings → Secrets and variables → Actions → Variables. Значение — публичный HTTPS URL развернутого FastAPI API (без завершающего `/`). Если переменная не задана, frontend продолжит работать в локальном режиме через localStorage. Для локальной сборки создайте `frontend/.env` на основе `frontend/.env.example`.
 
 ## Важное о Telegram
 В этом стартовом шаблоне frontend использует Telegram WebApp SDK для получения темы и данных интерфейса. Для реальной авторизации на backend обязательно проверяйте подпись `Telegram.WebApp.initData` на сервере по официальному алгоритму Telegram. Не доверяйте переданному клиентом user_id.
