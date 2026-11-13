@@ -49,9 +49,11 @@ export default function App() {
       try {
         const remote = await loadCloudState();
         if (remote) {
-          nextCompleted = remote.completed_days;
-          nextNotes = remote.notes;
-          nextStartedAt = remote.started_at;
+          if (remote.has_stored_data) {
+            nextCompleted = remote.completed_days;
+            nextNotes = remote.notes;
+            nextStartedAt = remote.started_at;
+          }
           if (!cancelled) { setCloudEnabled(true); setSyncStatus("synced"); }
         }
       } catch { if (!cancelled) setSyncStatus("offline"); }
