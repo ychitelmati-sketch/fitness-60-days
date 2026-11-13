@@ -24,6 +24,7 @@ export type RemoteState = {
   completed_days: number[];
   notes: Record<number, string>;
   started_at: string;
+  has_stored_data: boolean;
 };
 
 const PREFIX = "form60_";
@@ -88,6 +89,7 @@ export async function loadCloudState(): Promise<RemoteState | null> {
     completed_days: completed,
     notes,
     started_at: values[PREFIX + "started"] || new Date().toISOString(),
+    has_stored_data: Boolean(values[PREFIX + "completed"] || values[PREFIX + "started"] || Object.keys(notes).length),
   };
 }
 
