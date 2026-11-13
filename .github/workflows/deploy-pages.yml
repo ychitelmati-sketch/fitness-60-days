@@ -25,6 +25,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_BASE_PATH: /fitness-60-days/
         run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
