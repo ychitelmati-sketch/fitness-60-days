@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { authenticateTelegram, loadRemoteState, saveRemoteState } from "./api";
+import { loadCloudState, saveCloudState } from "./api";
 
 const STORAGE_KEY = "fitness-60-days-v2";
 const DAYS = Array.from({ length: 60 }, (_, i) => i + 1);
@@ -34,7 +34,7 @@ export default function App() {
   const [completed, setCompleted] = useState<number[]>([]);
   const [notes, setNotes] = useState<DayNotes>({});
   const [selectedDay, setSelectedDay] = useState(1);
-  const [token, setToken] = useState("");
+  const [cloudEnabled, setCloudEnabled] = useState(false);
   const [ready, setReady] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"local" | "synced" | "offline">("local");
   const [startedAt, setStartedAt] = useState(new Date().toISOString());
@@ -47,13 +47,12 @@ export default function App() {
       let nextNotes = local.notes;
       let nextStartedAt = local.startedAt;
       try {
-        const authToken = await authenticateTelegram();
-        if (authToken) {
-          const remote = await loadRemoteState(authToken);
-          if (Array.isArray(remote.completed_days)) nextCompleted = remote.completed_days as number[];
-          if (remote.notes && typeof remote.notes === "object") nextNotes = remote.notes as DayNotes;
-          if (typeof remote.started_at === "string") nextStartedAt = remote.started_at;
-          if (!cancelled) { setToken(authToken); setSyncStatus("synced"); }
+        const remote = await loadCloudState();
+        if (remote) {
+          nextCompleted = remote.completed_days;
+          nextNotes = remote.notes;
+          nextStartedAt = remote.started_at;
+          if (!cancelled) { setCloudEnabled(true); setSyncStatus("synced"); }
         }
       } catch { if (!cancelled) setSyncStatus("offline"); }
       if (!cancelled) {
@@ -70,14 +69,13 @@ export default function App() {
 
   useEffect(() => {
     if (!ready) return;
-    const state = { completed, notes, started_at: startedAt };
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ completed, notes, startedAt }));
-    if (token) {
-      void saveRemoteState(token, { completed_days: completed, notes, started_at: startedAt })
+    if (cloudEnabled) {
+      void saveCloudState({ completed_days: completed, notes, started_at: startedAt })
         .then(() => setSyncStatus("synced"))
         .catch(() => setSyncStatus("offline"));
     }
-  }, [completed, notes, token, ready, startedAt]);
+  }, [completed, notes, cloudEnabled, ready, startedAt]);
 
   const percent = Math.round(completed.length / 60 * 100);
   const streak = getStreak(completed);
